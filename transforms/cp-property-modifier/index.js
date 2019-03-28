@@ -1,10 +1,12 @@
 const { getParser } = require('codemod-cli').jscodeshift;
 const { getOptions } = require('codemod-cli');
 
-const isPropertyFunction = (callee) => {
-  return callee.object.type === 'FunctionExpression'
-    && callee.property.name === 'property';
-};
+const {
+  isCP,
+  isCPPropertyModifier,
+  getCPProperties,
+  createCP
+} = require('./utils');
 
 module.exports = function transformer(file, api) {
   const j = getParser(api);
@@ -12,23 +14,28 @@ module.exports = function transformer(file, api) {
 
   return j(file.source)
     .find(j.ObjectProperty)
-    .filter(path =>
-      path.node.value.type === 'CallExpression'
-      && isPropertyFunction(path.node.value.callee)
-    )
+    .filter(({ node }) => isCP(node))
     .forEach(path => {
-      let { value } = path.node;
+      let objectProperty = path.node;
+      let callee = objectProperty.value.callee;
 
-      let dependentKeys = value.arguments;
-      let computedFunction = value.callee.object;
+      let { dependentKeys, computedFunction } = getCPProperties(objectProperty);
+      let cp = createCP(j, dependentKeys, computedFunction);
 
-      path.node.value = j.callExpression(
-        j.memberExpression(
-          j.identifier('Ember'),
-          j.identifier('computed')
-        ),
-        [...dependentKeys, computedFunction]
-      );
+      // The simple case: `function() {}.property()`
+      if (isCPPropertyModifier(callee)) {
+        objectProperty.value = cp;
+        return;
+      }
+
+      // The nasty cases: `function() {}.property().meta({ a: 1 }).readOnly()`
+      let c = callee;
+      while (c.object.callee) {
+        callee = c;
+        c = c.object.callee;
+      }
+
+      callee.object = cp;
     })
     .toSource();
 };
