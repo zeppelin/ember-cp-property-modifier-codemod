@@ -18,8 +18,7 @@ ember-cp-property-modifier <TRANSFORM NAME> path/of/files/ or/some**/*glob.js
 
 ## Transforms
 
-<!--TRANSFORMS_START-->
-<!--TRANSFORMS_END-->
+- `cp-property-modifier`
 
 ## Contributing
 
